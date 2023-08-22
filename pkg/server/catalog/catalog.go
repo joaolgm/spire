@@ -26,6 +26,7 @@ import (
 	"github.com/spiffe/spire/pkg/server/hostservice/identityprovider"
 	"github.com/spiffe/spire/pkg/server/plugin/bundlepublisher"
 	"github.com/spiffe/spire/pkg/server/plugin/credentialcomposer"
+	"github.com/spiffe/spire/pkg/server/plugin/federation"
 	"github.com/spiffe/spire/pkg/server/plugin/keymanager"
 	"github.com/spiffe/spire/pkg/server/plugin/nodeattestor"
 	"github.com/spiffe/spire/pkg/server/plugin/nodeattestor/jointoken"
@@ -41,6 +42,7 @@ const (
 	nodeAttestorType       = "NodeAttestor"
 	notifierType           = "Notifier"
 	upstreamAuthorityType  = "UpstreamAuthority"
+	federationType         = "Federation"
 )
 
 type Catalog interface {
@@ -51,6 +53,7 @@ type Catalog interface {
 	GetKeyManager() keymanager.KeyManager
 	GetNotifiers() []notifier.Notifier
 	GetUpstreamAuthority() (upstreamauthority.UpstreamAuthority, bool)
+	GetFederations() []federation.Federation
 }
 
 type PluginConfigs = catalog.PluginConfigs
@@ -76,6 +79,7 @@ type Repository struct {
 	nodeAttestorRepository
 	notifierRepository
 	upstreamAuthorityRepository
+	federationRepository
 
 	log             logrus.FieldLogger
 	dataStoreCloser io.Closer
@@ -90,6 +94,7 @@ func (repo *Repository) Plugins() map[string]catalog.PluginRepo {
 		nodeAttestorType:       &repo.nodeAttestorRepository,
 		notifierType:           &repo.notifierRepository,
 		upstreamAuthorityType:  &repo.upstreamAuthorityRepository,
+		federationType:         &repo.federationRepository,
 	}
 }
 
@@ -120,6 +125,7 @@ func (repo *Repository) Close() {
 }
 
 func Load(ctx context.Context, config Config) (_ *Repository, err error) {
+	fmt.Println("<-- pkg/server/catalog/catalog.go - Load(ctx, config)")
 	if c, ok := config.PluginConfigs.Find(nodeAttestorType, jointoken.PluginName); ok && c.IsEnabled() && c.IsExternal() {
 		return nil, fmt.Errorf("the built-in join_token node attestor cannot be overridden by an external plugin")
 	}
