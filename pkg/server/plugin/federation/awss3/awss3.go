@@ -2,7 +2,6 @@ package awss3
 
 import (
 	"context"
-	"fmt"
 	"sync"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -40,13 +39,9 @@ type Config struct {
 	Bucket          string `hcl:"bucket" json:"bucket"`
 	ObjectKey       string `hcl:"object_key" json:"object_key"`
 	Format          string `hcl:"format" json:"format"`
-
-	// bundleFormat is used to store the content of Format, parsed
-	// as bundleformat.Format.
-	// bundleFormat bundleformat.Format
 }
 
-// Plugin is the main representation of this bundle publisher plugin.
+// Plugin is the main representation of this plugin_base plugin.
 type Plugin struct {
 	federationv1.UnsafeFederationServer
 	configv1.UnsafeConfigServer
@@ -69,7 +64,6 @@ func (p *Plugin) SetLogger(log hclog.Logger) {
 
 // Configure configures the plugin.
 func (p *Plugin) Configure(ctx context.Context, req *configv1.ConfigureRequest) (*configv1.ConfigureResponse, error) {
-	fmt.Println("<-- pkg/server/plugin/federation/awss3/awss3.go - Configure(ctx, configRequest)")
 	config, err := parseAndValidateConfig(req.HclConfiguration)
 	if err != nil {
 		return nil, err
@@ -90,25 +84,26 @@ func (p *Plugin) Configure(ctx context.Context, req *configv1.ConfigureRequest) 
 	return &configv1.ConfigureResponse{}, nil
 }
 
-// PublishBundle puts the bundle in the configured S3 bucket name and
+// PushBundle puts the string in the configured S3 bucket name and
 // object key.
+// This method is not doing his complete job. The connections with
+// the s3 has not been fully studied.
 func (p *Plugin) PushBundle(ctx context.Context, req *federationv1.PushBundleRequest) (*federationv1.PushBundleResponse, error) {
-	fmt.Println("<-- Metodo PushBundle")
-	config, err := p.getConfig()
-	if err != nil {
-		return nil, err
-	}
+	// config, err := p.getConfig()
+	// if err != nil {
+	// 	return nil, err
+	// }
 
 	if req.Request == "" {
 		return nil, status.Error(codes.InvalidArgument, "missing bundle in request")
 	}
 
-	// currentBundle := p.getBundle()
+	currentBundle := p.getBundle()
 
-	// if proto.Equal(req.Request, currentBundle) {
-	// 	// Bundle not changed. No need to publish.
-	// 	return &federationv1.PushBundleResponse{}, nil
-	// }
+	if req.Request == currentBundle {
+		// Bundle not changed. No need to publish.
+		return &federationv1.PushBundleResponse{}, nil
+	}
 
 	// formatter, err := bundleformat.FromString(req.Request)
 	// bundleBytes, err := formatter.Format(config.bundleFormat)
@@ -116,21 +111,22 @@ func (p *Plugin) PushBundle(ctx context.Context, req *federationv1.PushBundleReq
 	// 	return nil, status.Errorf(codes.Internal, "could not format bundle: %v", err.Error())
 	// }
 
-	_, err = p.s3Client.PutObject(ctx, &s3.PutObjectInput{
-		Bucket: aws.String(config.Bucket),
-		// Body:   bytes.NewReader(bundleBytes),
-		Key: aws.String(config.ObjectKey),
-	})
+	// _, err = p.s3Client.PutObject(ctx, &s3.PutObjectInput{
+	// 	Bucket: aws.String(config.Bucket),
+	// 	Body:   bytes.NewReader([]byte(req.Request)),
+	// 	Key:    aws.String(config.ObjectKey),
+	// })
 
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to put object: %v", err)
-	}
+	// if err != nil {
+	// 	return nil, status.Errorf(codes.Internal, "failed to put object: %v", err)
+	// }
 
 	p.setBundle(req.Request)
-	p.log.Debug("Bundle published")
+	p.log.Debug("String pushed")
 	return &federationv1.PushBundleResponse{}, nil
 }
 
+// This method is not used yet, skip it.
 func (p *Plugin) ApproveRelationship(ctx context.Context, req *federationv1.RelationshipRequest) (*federationv1.RelationshipResponse, error) {
 	config, err := p.getConfig()
 	if err != nil {
@@ -169,12 +165,12 @@ func (p *Plugin) ApproveRelationship(ctx context.Context, req *federationv1.Rela
 }
 
 // getBundle gets the latest bundle that the plugin has.
-// func (p *Plugin) getBundle() string {
-// 	p.configMtx.RLock()
-// 	defer p.configMtx.RUnlock()
+func (p *Plugin) getBundle() string {
+	p.configMtx.RLock()
+	defer p.configMtx.RUnlock()
 
-// 	return p.request
-// }
+	return p.request
+}
 
 // getConfig gets the configuration of the plugin.
 func (p *Plugin) getConfig() (*Config, error) {
@@ -203,7 +199,7 @@ func (p *Plugin) setConfig(config *Config) {
 	p.config = config
 }
 
-// builtin creates a new BundlePublisher built-in plugin.
+// builtin creates a new Federation built-in plugin.
 func builtin(p *Plugin) catalog.BuiltIn {
 	return catalog.MakeBuiltIn(pluginName,
 		federationv1.FederationPluginServer(p),
@@ -228,7 +224,7 @@ func parseAndValidateConfig(c string) (*Config, error) {
 	if err := hcl.Decode(config, c); err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "unable to decode configuration: %v", err)
 	}
-	fmt.Println(config)
+
 	if config.Region == "" {
 		return nil, status.Error(codes.InvalidArgument, "configuration is missing the region")
 	}
@@ -244,19 +240,6 @@ func parseAndValidateConfig(c string) (*Config, error) {
 	if config.Format == "" {
 		return nil, status.Error(codes.InvalidArgument, "configuration is missing the bundle format")
 	}
-	// bundleFormat, err := bundleformat.FromString(config.Format)
-	// if err != nil {
-	// 	return nil, status.Errorf(codes.InvalidArgument, "could not parse bundle format from configuration: %v", err)
-	// }
-	// The bundleformat package may support formats that this plugin does not
-	// support. Validate that the format is a supported format in this plugin.
-	// switch bundleFormat {
-	// case bundleformat.JWKS:
-	// case bundleformat.SPIFFE:
-	// case bundleformat.PEM:
-	// default:
-	// 	return nil, status.Errorf(codes.InvalidArgument, "format not supported %q", config.Format)
-	// }
 
 	return config, nil
 }

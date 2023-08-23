@@ -5,7 +5,6 @@ package fedmanager
 import (
 	"context"
 	"errors"
-	"fmt"
 	"sync"
 	"time"
 
@@ -18,7 +17,7 @@ import (
 
 const (
 	// refreshInterval is the interval to check for an updated trust bundle.
-	refreshInterval = 30 * time.Second
+	refreshInterval = 3 * time.Second
 )
 
 // NewManager creates a new federation manager.
@@ -46,11 +45,11 @@ type Manager struct {
 	trustDomain         spiffeid.TrustDomain
 
 	hooks struct {
-		// Test hook used to indicate an attempt to publish a bundle using a
-		// specific bundle publisher.
+		// Test hook used to indicate an attempt to push a string using a
+		// specific plugin_base.
 		pushResultCh chan *pushResult
 
-		// Test hook used to indicate when the action of publishing a bundle
+		// Test hook used to indicate when the action of pushing a string
 		// has finished.
 		pushedCh chan error
 	}
@@ -58,7 +57,6 @@ type Manager struct {
 
 // Run runs the federation manager.
 func (m *Manager) Run(ctx context.Context) error {
-	fmt.Println("<-- pkg/server/fedmanager/fedmanager.go - Run(ctx)")
 	ticker := m.clock.Ticker(refreshInterval)
 	defer ticker.Stop()
 
@@ -74,14 +72,14 @@ func (m *Manager) Run(ctx context.Context) error {
 	}
 }
 
-// BundleUpdated tells the bundle publishing manager that the bundle has been
-// updated and forces a PublishBundle operation on all the plugins.
+// BundleUpdated tells the federation manager that the bundle has been
+// updated and forces a PushBundle operation on all the plugins.
 func (m *Manager) BundleUpdated() {
 	m.drainBundleUpdated()
 	m.federationUpdatedCh <- struct{}{}
 }
 
-// callPublishBundle calls the publishBundle function and logs if there was an
+// callPushBundle calls the pushBundle function and logs if there was an
 // error.
 func (m *Manager) callPushBundle(ctx context.Context) {
 	if err := m.pushBundle(ctx); err != nil && ctx.Err() == nil {
@@ -89,9 +87,9 @@ func (m *Manager) callPushBundle(ctx context.Context) {
 	}
 }
 
-// publishBundle iterates through the configured bundle publishers and calls
-// PublishBundle with the fetched bundle. This function only returns an error
-// if bundle publishers can't be called due to a failure fetching the bundle
+// pushBundle iterates through the configured plugin_base and calls
+// PushBundle with the fetched string. This function only returns an error
+// if plugin_base can't be called due to a failure fetching the bundle
 // from the datastore.
 func (m *Manager) pushBundle(ctx context.Context) (err error) {
 	defer func() {
@@ -102,12 +100,7 @@ func (m *Manager) pushBundle(ctx context.Context) (err error) {
 		return nil
 	}
 
-	// bundle, err := m.dataStore.FetchBundle(ctx, m.trustDomain.IDString())
-	// if err != nil {
-	// 	return fmt.Errorf("failed to fetch bundle from datastore: %w", err)
-	// }
-
-	testing := "ooooooi"
+	testing := "testing string"
 	var wg sync.WaitGroup
 	wg.Add(len(m.federations))
 	for _, bp := range m.federations {
@@ -118,7 +111,7 @@ func (m *Manager) pushBundle(ctx context.Context) (err error) {
 			log := m.log.WithField(bp.Type(), bp.Name())
 			err := bp.PushBundle(ctx, testing)
 			if err != nil {
-				log.WithError(err).Error("Failed to publish bundle")
+				log.WithError(err).Error("Failed to push bundle")
 			}
 
 			m.triggerPushResultHook(&pushResult{
@@ -131,24 +124,24 @@ func (m *Manager) pushBundle(ctx context.Context) (err error) {
 
 	wg.Wait()
 
-	// PublishBundle was called on all the plugins. Is the responsibility of
+	// PushBundle was called on all the plugins. Is the responsibility of
 	// each plugin to handle failure conditions and implement a retry logic if
 	// needed.
 	return nil
 }
 
-// triggerPublishResultHook is called to know when the publish action using a
-// specific bundle publisher has happened. It informs the result of calling the
-// PublishBundle method to a bundle publisher.
+// triggerPushResultHook is called to know when the push action using a
+// specific plugin_base has happened. It informs the result of calling the
+// PushBundle method to a plugin_base.
 func (m *Manager) triggerPushResultHook(result *pushResult) {
 	if m.hooks.pushResultCh != nil {
 		m.hooks.pushResultCh <- result
 	}
 }
 
-// publishDone is called to know when a publish action has finished and informs
-// if there was an error in the overall action (not specific to a bundle
-// publisher). A publish action happens periodically (every refreshInterval) and
+// pushDone is called to know when a push action has finished and informs
+// if there was an error in the overall action (not specific to a plugin_base).
+// A push action happens periodically (every refreshInterval) and
 // also when BundleUpdated() is called.
 func (m *Manager) pushDone(err error) {
 	if m.hooks.pushedCh != nil {
@@ -156,8 +149,8 @@ func (m *Manager) pushDone(err error) {
 	}
 }
 
-// publishResult holds information about the result of trying to publish a
-// bundle using a specific bundle publisher.
+// pushResult holds information about the result of trying to push a
+// string using a specific plugin_base.
 type pushResult struct {
 	pluginName string
 	bundle     string

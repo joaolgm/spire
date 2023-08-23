@@ -2,6 +2,8 @@ package federation
 
 import (
 	"context"
+	"math/rand"
+	"strconv"
 
 	federationv1 "github.com/spiffe/spire-plugin-sdk/proto/spire/plugin/server/federation/v1"
 	"github.com/spiffe/spire/pkg/common/plugin"
@@ -14,8 +16,10 @@ type V1 struct {
 
 func (v1 *V1) PushBundle(ctx context.Context, b string) error {
 
+	randomString := strconv.Itoa(rand.Intn(2))
+
 	_, err := v1.FederationPluginClient.PushBundle(ctx, &federationv1.PushBundleRequest{
-		Request: "oooi",
+		Request: randomString,
 	})
 	return v1.WrapErr(err)
 }

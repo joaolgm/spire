@@ -117,7 +117,6 @@ type Config struct {
 // configure, all plugins are unloaded, the catalog is cleared, and the
 // function returns an error.
 func Load(ctx context.Context, config Config, cat Catalog) (_ io.Closer, err error) {
-	fmt.Println("<-- pkg/common/catalog/catalog.go - Load(ctx, config, catalog)")
 	closers := make(closerGroup, 0)
 	defer func() {
 		// If loading fails, clear out the catalog and close down all plugins
@@ -178,7 +177,6 @@ func Load(ctx context.Context, config Config, cat Catalog) (_ io.Closer, err err
 
 		switch {
 		case configurer != nil:
-			fmt.Println(pluginConfig.Name)
 			if err := configurer.Configure(ctx, config.CoreConfig, pluginConfig.Data); err != nil {
 				pluginLog.WithError(err).Error("Failed to configure plugin")
 				return nil, fmt.Errorf("failed to configure plugin %q: %w", pluginConfig.Name, err)
