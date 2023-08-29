@@ -33,9 +33,11 @@ import (
 	"github.com/spiffe/spire/pkg/server/credvalidator"
 	"github.com/spiffe/spire/pkg/server/datastore"
 	"github.com/spiffe/spire/pkg/server/endpoints"
+	"github.com/spiffe/spire/pkg/server/fedmanager"
 	"github.com/spiffe/spire/pkg/server/hostservice/agentstore"
 	"github.com/spiffe/spire/pkg/server/hostservice/identityprovider"
 	"github.com/spiffe/spire/pkg/server/plugin/bundlepublisher"
+	"github.com/spiffe/spire/pkg/server/plugin/federation"
 	"github.com/spiffe/spire/pkg/server/registration"
 	"github.com/spiffe/spire/pkg/server/svid"
 	"google.golang.org/grpc"
@@ -124,6 +126,11 @@ func (s *Server) run(ctx context.Context) (err error) {
 	}
 	cat.DataStore = ds_pubmanager.WithBundleUpdateCallback(cat.DataStore, bundlePublishingManager.BundleUpdated)
 
+	federationsManager, err := s.newFederationManager(cat.Federations, cat.DataStore)
+	if err != nil {
+		return err
+	}
+
 	err = s.validateTrustDomain(ctx, cat.GetDataStore())
 	if err != nil {
 		return err
@@ -207,6 +214,7 @@ func (s *Server) run(ctx context.Context) (err error) {
 		bundleManager.Run,
 		registrationManager.Run,
 		bundlePublishingManager.Run,
+		federationsManager.Run,
 		util.SerialRun(s.waitForTestDial, healthChecker.ListenAndServe),
 		scanForBadEntries(s.config.Log, metrics, cat.GetDataStore()),
 	}
@@ -424,6 +432,17 @@ func (s *Server) newBundlePublishingManager(bundlePublishers []bundlepublisher.B
 		DataStore:        ds,
 		TrustDomain:      s.config.TrustDomain,
 		Log:              log,
+	})
+}
+
+// newFederationManager creates a manager for the the Federation type plugins
+func (s *Server) newFederationManager(federations []federation.Federation, ds datastore.DataStore) (*fedmanager.Manager, error) {
+	log := s.config.Log.WithField(telemetry.SubsystemName, "federation")
+	return fedmanager.NewManager(&fedmanager.ManagerConfig{
+		Federations: federations,
+		DataStore:   ds,
+		TrustDomain: s.config.TrustDomain,
+		Log:         log,
 	})
 }
 

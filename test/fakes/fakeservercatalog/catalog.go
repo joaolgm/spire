@@ -4,6 +4,7 @@ import (
 	"github.com/spiffe/spire/pkg/server/datastore"
 	"github.com/spiffe/spire/pkg/server/plugin/bundlepublisher"
 	"github.com/spiffe/spire/pkg/server/plugin/credentialcomposer"
+	"github.com/spiffe/spire/pkg/server/plugin/federation"
 	"github.com/spiffe/spire/pkg/server/plugin/keymanager"
 	"github.com/spiffe/spire/pkg/server/plugin/nodeattestor"
 	"github.com/spiffe/spire/pkg/server/plugin/notifier"
@@ -22,6 +23,7 @@ type Catalog struct {
 	nodeAttestorRepository
 	notifierRepository
 	upstreamAuthorityRepository
+	federationRepository
 }
 
 // We need distinct type names to embed in the Catalog above, since the types
@@ -33,3 +35,4 @@ type keyManagerRepository struct{ keymanager.Repository }
 type nodeAttestorRepository struct{ nodeattestor.Repository }
 type notifierRepository struct{ notifier.Repository }
 type upstreamAuthorityRepository struct{ upstreamauthority.Repository }
+type federationRepository struct{ federation.Repository }
